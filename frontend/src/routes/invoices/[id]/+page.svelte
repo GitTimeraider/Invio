@@ -404,6 +404,16 @@
           </a>
         {/if}
 
+        {#if invoice.status === "draft" && canUpdate}
+          <form method="post" use:enhance>
+            <input type="hidden" name="intent" value="mark-sent" />
+            <button type="submit" class="btn btn-sm btn-primary" title={t("Mark as Sent")}>
+              <Send size={16} />
+              <span class="hidden sm:inline">{t("Mark as Sent")}</span>
+            </button>
+          </form>
+        {/if}
+
         {#if invoice.status === "paid" && canUpdate}
           <form method="post" use:enhance>
             <input type="hidden" name="intent" value="mark-complete" />
@@ -456,7 +466,7 @@
         {#if emailEnabled && canExport && (invoice.status === "draft" || invoice.status === "sent" || invoice.status === "overdue" || invoice.status === "paid")}
           <button type="button" class="btn btn-sm" onclick={openEmailModal}>
             <Mail size={16} />
-            <span class="hidden sm:inline">{emailDialogTitle}</span>
+            <span class="hidden sm:inline">{invoice.status === "draft" ? t("Send via Email") : emailDialogTitle}</span>
           </button>
         {/if}
 
