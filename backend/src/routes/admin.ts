@@ -1964,9 +1964,6 @@ adminRoutes.post(
     const dueDate = invoice.dueDate
       ? new Date(invoice.dueDate).toISOString().slice(0, 10)
       : null;
-    const origin = c.req.header("origin") ||
-      c.req.header("referer")?.replace(/\/$/, "") || "";
-    const shareLink = null;
 
     // Substitute template variables in subject and message
     function interpolate(text: string): string {
@@ -1988,9 +1985,6 @@ adminRoutes.post(
     const messageHtml = resolvedMessage
       ? `<p>${escapeHtml(resolvedMessage).replace(/\n/g, "<br>")}</p>`
       : "";
-    const shareLinkHtml = shareLink
-      ? `<p><a href="${shareLink}" style="color:#2563eb;">View invoice online</a></p>`
-      : "";
     const dueDateHtml = dueDate ? `<tr><td style="padding:4px 8px;color:#6b7280;">Due date</td><td style="padding:4px 8px;">${dueDate}</td></tr>` : "";
 
     const htmlBody = `<!DOCTYPE html>
@@ -2004,7 +1998,6 @@ adminRoutes.post(
     <tr><td style="padding:4px 8px;color:#6b7280;">Issue date</td><td style="padding:4px 8px;">${issueDate}</td></tr>
     ${dueDateHtml}
   </table>
-  ${shareLinkHtml}
   <p style="color:#6b7280;font-size:13px;">The invoice PDF is attached to this email.</p>
 </body>
 </html>`;

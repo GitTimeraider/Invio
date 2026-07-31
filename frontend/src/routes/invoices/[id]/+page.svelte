@@ -397,11 +397,21 @@
 
     {#if invoice}
       <div class="flex flex-wrap items-center gap-2">
-        {#if canEditInvoice}
+        {#if invoice.status !== "draft" && canEditInvoice}
           <a href="/invoices/{invoice.id}/edit" class="btn btn-sm" onclick={confirmEditNavigation}>
             <Pencil size={16} />
             <span class="hidden sm:inline">{t("Edit")}</span>
           </a>
+        {/if}
+
+        {#if invoice.status === "draft" && canUpdate}
+          <form method="post" use:enhance>
+            <input type="hidden" name="intent" value="mark-sent" />
+            <button type="submit" class="btn btn-sm btn-primary" title={t("Mark as Sent")}>
+              <Send size={16} />
+              <span class="hidden sm:inline">{t("Mark as Sent")}</span>
+            </button>
+          </form>
         {/if}
 
         {#if invoice.status === "paid" && canUpdate}
@@ -456,7 +466,7 @@
         {#if emailEnabled && canExport && (invoice.status === "draft" || invoice.status === "sent" || invoice.status === "overdue" || invoice.status === "paid")}
           <button type="button" class="btn btn-sm" onclick={openEmailModal}>
             <Mail size={16} />
-            <span class="hidden sm:inline">{emailDialogTitle}</span>
+            <span class="hidden sm:inline">{invoice.status === "draft" ? t("Send via Email") : emailDialogTitle}</span>
           </button>
         {/if}
 
@@ -466,6 +476,14 @@
             <span class="hidden sm:inline">{t("More")}</span>
           </div>
           <ul tabindex="-1" class="menu menu-sm dropdown-content bg-base-100 rounded-box border-base-200 z-1 mt-2 w-56 border p-2 shadow">
+            {#if invoice.status === "draft" && canEditInvoice}
+              <li>
+                <a href="/invoices/{invoice.id}/edit" class="flex items-center gap-2 py-2" onclick={confirmEditNavigation}>
+                  <Pencil size={16} />
+                  {t("Edit")}
+                </a>
+              </li>
+            {/if}
             <li>
               <button type="submit" form="inv-duplicate" class="flex items-center gap-2 py-2">
                 <Copy size={16} />

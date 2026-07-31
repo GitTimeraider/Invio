@@ -1167,7 +1167,6 @@ export const duplicateInvoice = async (
         totals.total,
         original.paymentTerms || null,
         original.notes || null,
-        "",
         now,
         now,
         (original as Invoice).pricesIncludeTax ? 1 : 0,
