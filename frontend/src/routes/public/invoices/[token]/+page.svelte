@@ -1,1 +1,1 @@
-﻿
+﻿<!-- Public invoice sharing is disabled. The route returns 404 from the server load. -->
