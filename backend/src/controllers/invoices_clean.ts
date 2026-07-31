@@ -5,7 +5,6 @@ import { generateUUID } from "../utils/uuid.ts";
 export const createInvoice = (data: Partial<Invoice>) => {
   const db = getDatabase();
   const invoiceId = generateUUID();
-  const shareToken = generateUUID();
 
   const invoice: Invoice = {
     id: invoiceId,
@@ -29,7 +28,6 @@ export const createInvoice = (data: Partial<Invoice>) => {
     notes: data.notes,
 
     // System fields
-    shareToken: shareToken,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -38,8 +36,8 @@ export const createInvoice = (data: Partial<Invoice>) => {
     `INSERT INTO invoices (
       id, invoice_number, customer_id, issue_date, due_date, currency, status,
       subtotal, discount_amount, discount_percentage, tax_rate, tax_amount, total,
-      payment_terms, notes, share_token, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      payment_terms, notes, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
     [
       invoice.id,
       invoice.invoiceNumber,
@@ -56,7 +54,6 @@ export const createInvoice = (data: Partial<Invoice>) => {
       invoice.total,
       invoice.paymentTerms,
       invoice.notes,
-      invoice.shareToken,
       invoice.createdAt,
       invoice.updatedAt,
     ],
@@ -73,14 +70,6 @@ export const getInvoices = () => {
 export const getInvoiceById = (id: string) => {
   const db = getDatabase();
   const result = db.query("SELECT * FROM invoices WHERE id = ?", [id]);
-  return result.length > 0 ? result[0] : null;
-};
-
-export const getInvoiceByShareToken = (shareToken: string) => {
-  const db = getDatabase();
-  const result = db.query("SELECT * FROM invoices WHERE share_token = ?", [
-    shareToken,
-  ]);
   return result.length > 0 ? result[0] : null;
 };
 
@@ -118,14 +107,4 @@ export const deleteInvoice = (id: string) => {
   const db = getDatabase();
   db.query("DELETE FROM invoices WHERE id = ?", [id]);
   return true;
-};
-
-export const publishInvoice = (id: string) => {
-  const shareToken = generateUUID();
-  const db = getDatabase();
-  db.query(
-    "UPDATE invoices SET share_token = ?, status = 'sent' WHERE id = ?",
-    [shareToken, id],
-  );
-  return { shareToken };
 };

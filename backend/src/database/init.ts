@@ -429,7 +429,6 @@ function migrateInvoicesForVoided(database: DB): void {
         total NUMERIC NOT NULL,
         payment_terms TEXT,
         notes TEXT,
-        share_token TEXT UNIQUE NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         prices_include_tax BOOLEAN DEFAULT 0,
@@ -461,10 +460,6 @@ function migrateInvoicesForVoided(database: DB): void {
     database.execute(
       "CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status)",
     );
-    database.execute(
-      "CREATE INDEX IF NOT EXISTS idx_invoices_share_token ON invoices(share_token)",
-    );
-
     database.execute("COMMIT");
     console.log(
       " Migrated invoices table to support 'voided' and 'complete' statuses",

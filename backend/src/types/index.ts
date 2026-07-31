@@ -59,7 +59,6 @@ export interface Invoice {
   locale?: string;
 
   // System fields
-  shareToken: string;
   createdAt: Date;
   updatedAt: Date;
 }

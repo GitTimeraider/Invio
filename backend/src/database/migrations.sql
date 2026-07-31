@@ -68,7 +68,6 @@ CREATE TABLE invoices (
   notes TEXT,
   
   -- System fields
-  share_token TEXT UNIQUE NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -116,7 +115,6 @@ ALTER TABLE templates ADD COLUMN template_type TEXT DEFAULT 'builtin';
 CREATE INDEX idx_invoices_number ON invoices(invoice_number);
 CREATE INDEX idx_invoices_customer ON invoices(customer_id);
 CREATE INDEX idx_invoices_status ON invoices(status);
-CREATE INDEX idx_invoices_share_token ON invoices(share_token);
 CREATE INDEX idx_invoice_items_invoice ON invoice_items(invoice_id);
 
 -- Normalized tax schema (for complex/composite taxes)

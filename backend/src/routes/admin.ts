@@ -7,9 +7,7 @@ import {
   getInvoiceById,
   getInvoices,
   getLatestPaidPaymentMethods,
-  publishInvoice,
   recordEmailLog,
-  unpublishInvoice,
   updateInvoice,
   voidInvoice,
 } from "../controllers/invoices.ts";
@@ -440,30 +438,6 @@ adminRoutes.delete(
     } catch (e) {
       return c.json({ error: String(e) }, 400);
     }
-  },
-);
-
-adminRoutes.post(
-  "/invoices/:id/publish",
-  requirePermission("invoices", "publish"),
-  async (c) => {
-    const id = c.req.param("id");
-    try {
-      const result = await publishInvoice(id);
-      return c.json(result);
-    } catch (e) {
-      return c.json({ error: String(e) }, 400);
-    }
-  },
-);
-
-adminRoutes.post(
-  "/invoices/:id/unpublish",
-  requirePermission("invoices", "publish"),
-  async (c) => {
-    const id = c.req.param("id");
-    const result = await unpublishInvoice(id);
-    return c.json(result);
   },
 );
 
@@ -1992,9 +1966,7 @@ adminRoutes.post(
       : null;
     const origin = c.req.header("origin") ||
       c.req.header("referer")?.replace(/\/$/, "") || "";
-    const shareLink = invoice.shareToken && origin
-      ? `${origin}/public/invoices/${invoice.shareToken}`
-      : null;
+    const shareLink = null;
 
     // Substitute template variables in subject and message
     function interpolate(text: string): string {
