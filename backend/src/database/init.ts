@@ -393,15 +393,24 @@ function migrateInvoicesForVoided(database: DB): void {
     "SELECT sql FROM sqlite_master WHERE type='table' AND name='invoices'",
   );
   const createSql = checkSql.length > 0 ? String(checkSql[0][0]) : "";
-  if (
+  const existingCols = (
+    database.query("PRAGMA table_info(invoices)") as unknown[][]
+  ).map((r) => String(r[1]));
+  const needsCurrentSchema =
     !createSql ||
-    (createSql.includes("voided") && createSql.includes("complete"))
-  ) {
+    createSql.includes("share_token") ||
+    !existingCols.includes("prices_include_tax") ||
+    !existingCols.includes("rounding_mode") ||
+    !existingCols.includes("locale") ||
+    !createSql.includes("voided") ||
+    !createSql.includes("complete");
+
+  if (!needsCurrentSchema) {
     return;
   }
 
   console.log(
-    "Migrating invoices table to support 'voided' and 'complete' statuses",
+    "Migrating invoices table to the current schema",
   );
 
   const itemCountBefore = Number(

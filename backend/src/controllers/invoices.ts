@@ -65,6 +65,17 @@ function isInvoiceProtectionOverrideEnabled(): boolean {
   );
 }
 
+function invoiceHasColumn(db: ReturnType<typeof getDatabase>, columnName: string): boolean {
+  try {
+    const columns = (db.query("PRAGMA table_info(invoices)") as unknown[][]).map((row) =>
+      String(row[1]),
+    );
+    return columns.includes(columnName);
+  } catch {
+    return false;
+  }
+}
+
 function calculatePerLineTotals(
   items: ItemInput[],
   discountPercentage = 0,
@@ -417,34 +428,56 @@ export const createInvoice = (
   };
 
   // Insert invoice
+  const invoiceInsertColumns = [
+    "id",
+    "invoice_number",
+    "customer_id",
+    "issue_date",
+    "due_date",
+    "currency",
+    "status",
+    "subtotal",
+    "discount_amount",
+    "discount_percentage",
+    "tax_rate",
+    "tax_amount",
+    "total",
+    "payment_terms",
+    "notes",
+    "created_at",
+    "updated_at",
+  ];
+  const invoiceInsertValues = [
+    invoice.id,
+    invoice.invoiceNumber,
+    invoice.customerId,
+    invoice.issueDate,
+    invoice.dueDate,
+    invoice.currency,
+    invoice.status,
+    invoice.subtotal,
+    invoice.discountAmount,
+    invoice.discountPercentage,
+    invoice.taxRate,
+    invoice.taxAmount,
+    invoice.total,
+    invoice.paymentTerms,
+    invoice.notes,
+    invoice.createdAt,
+    invoice.updatedAt,
+  ];
+  if (invoiceHasColumn(db, "prices_include_tax")) {
+    invoiceInsertColumns.push("prices_include_tax");
+    invoiceInsertValues.push(pricesIncludeTax ? 1 : 0);
+  }
+  if (invoiceHasColumn(db, "rounding_mode")) {
+    invoiceInsertColumns.push("rounding_mode");
+    invoiceInsertValues.push(roundingMode);
+  }
+
   db.query(
-    `INSERT INTO invoices (
-      id, invoice_number, customer_id, issue_date, due_date, currency, status,
-      subtotal, discount_amount, discount_percentage, tax_rate, tax_amount, total,
-      payment_terms, notes, created_at, updated_at,
-      prices_include_tax, rounding_mode
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      invoice.id,
-      invoice.invoiceNumber,
-      invoice.customerId,
-      invoice.issueDate,
-      invoice.dueDate,
-      invoice.currency,
-      invoice.status,
-      invoice.subtotal,
-      invoice.discountAmount,
-      invoice.discountPercentage,
-      invoice.taxRate,
-      invoice.taxAmount,
-      invoice.total,
-      invoice.paymentTerms,
-      invoice.notes,
-      invoice.createdAt,
-      invoice.updatedAt,
-      pricesIncludeTax ? 1 : 0,
-      roundingMode,
-    ],
+    `INSERT INTO invoices (${invoiceInsertColumns.join(", ")}) VALUES (${invoiceInsertColumns.map(() => "?").join(", ")})`,
+    invoiceInsertValues,
   );
   recordStatusChange(db, invoiceId, invoice.status || "draft");
 
