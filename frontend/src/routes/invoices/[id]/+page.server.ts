@@ -32,10 +32,8 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
     const allowProtectedInvoiceChanges =
       String(settings.allowProtectedInvoiceChanges || "false").toLowerCase() ===
       "true";
-    const showPublishedBanner = url.searchParams.get("published") === "1";
     return {
       invoice: invoiceRes.value,
-      showPublishedBanner,
       allowProtectedInvoiceChanges,
       defaultEmailConfigId:
         typeof settings.defaultEmailConfigId === "string"
@@ -63,14 +61,6 @@ export const actions: Actions = {
       if (intent === "delete") {
         await backendDelete(`/api/v1/invoices/${id}`, locals.authHeader);
         throw redirect(303, "/invoices");
-      }
-      if (intent === "publish") {
-        await backendPost(
-          `/api/v1/invoices/${id}/publish`,
-          locals.authHeader,
-          {},
-        );
-        throw redirect(303, `/invoices/${id}?published=1`);
       }
       if (intent === "mark-sent") {
         await backendPut(`/api/v1/invoices/${id}`, locals.authHeader, {
@@ -102,14 +92,6 @@ export const actions: Actions = {
         const newId = copy && copy.id ? String(copy.id) : null;
         if (!newId) throw new Error("Failed to duplicate invoice");
         throw redirect(303, `/invoices/${newId}/edit`);
-      }
-      if (intent === "unpublish") {
-        await backendPost(
-          `/api/v1/invoices/${id}/unpublish`,
-          locals.authHeader,
-          {},
-        );
-        throw redirect(303, `/invoices/${id}`);
       }
       if (intent === "void") {
         await backendPost(`/api/v1/invoices/${id}/void`, locals.authHeader, {});

@@ -14,7 +14,7 @@ import {
   StatusHistoryEntry,
   UpdateInvoiceRequest,
 } from "../types/index.ts";
-import { generateShareToken, generateUUID } from "../utils/uuid.ts";
+import { generateUUID } from "../utils/uuid.ts";
 
 type LineTaxInput = {
   percent: number;
@@ -63,6 +63,17 @@ function isInvoiceProtectionOverrideEnabled(): boolean {
     normalized === "yes" ||
     normalized === "on"
   );
+}
+
+function invoiceHasColumn(db: ReturnType<typeof getDatabase>, columnName: string): boolean {
+  try {
+    const columns = (db.query("PRAGMA table_info(invoices)") as unknown[][]).map((row) =>
+      String(row[1]),
+    );
+    return columns.includes(columnName);
+  } catch {
+    return false;
+  }
 }
 
 function calculatePerLineTotals(
@@ -296,7 +307,6 @@ export const createInvoice = (
 ): InvoiceWithDetails => {
   const db = getDatabase();
   const invoiceId = generateUUID();
-  const shareToken = generateShareToken();
   // Prefer client-provided invoiceNumber when unique; otherwise auto-generate
   let invoiceNumber = data.invoiceNumber;
   if (invoiceNumber) {
@@ -413,41 +423,61 @@ export const createInvoice = (
     notes: data.notes,
 
     // System fields
-    shareToken,
     createdAt: now,
     updatedAt: now,
   };
 
   // Insert invoice
+  const invoiceInsertColumns = [
+    "id",
+    "invoice_number",
+    "customer_id",
+    "issue_date",
+    "due_date",
+    "currency",
+    "status",
+    "subtotal",
+    "discount_amount",
+    "discount_percentage",
+    "tax_rate",
+    "tax_amount",
+    "total",
+    "payment_terms",
+    "notes",
+    "created_at",
+    "updated_at",
+  ];
+  const invoiceInsertValues = [
+    invoice.id,
+    invoice.invoiceNumber,
+    invoice.customerId,
+    invoice.issueDate,
+    invoice.dueDate,
+    invoice.currency,
+    invoice.status,
+    invoice.subtotal,
+    invoice.discountAmount,
+    invoice.discountPercentage,
+    invoice.taxRate,
+    invoice.taxAmount,
+    invoice.total,
+    invoice.paymentTerms,
+    invoice.notes,
+    invoice.createdAt,
+    invoice.updatedAt,
+  ];
+  if (invoiceHasColumn(db, "prices_include_tax")) {
+    invoiceInsertColumns.push("prices_include_tax");
+    invoiceInsertValues.push(pricesIncludeTax ? 1 : 0);
+  }
+  if (invoiceHasColumn(db, "rounding_mode")) {
+    invoiceInsertColumns.push("rounding_mode");
+    invoiceInsertValues.push(roundingMode);
+  }
+
   db.query(
-    `INSERT INTO invoices (
-      id, invoice_number, customer_id, issue_date, due_date, currency, status,
-      subtotal, discount_amount, discount_percentage, tax_rate, tax_amount, total,
-      payment_terms, notes, share_token, created_at, updated_at,
-      prices_include_tax, rounding_mode
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      invoice.id,
-      invoice.invoiceNumber,
-      invoice.customerId,
-      invoice.issueDate,
-      invoice.dueDate,
-      invoice.currency,
-      invoice.status,
-      invoice.subtotal,
-      invoice.discountAmount,
-      invoice.discountPercentage,
-      invoice.taxRate,
-      invoice.taxAmount,
-      invoice.total,
-      invoice.paymentTerms,
-      invoice.notes,
-      invoice.shareToken,
-      invoice.createdAt,
-      invoice.updatedAt,
-      pricesIncludeTax ? 1 : 0,
-      roundingMode,
-    ],
+    `INSERT INTO invoices (${invoiceInsertColumns.join(", ")}) VALUES (${invoiceInsertColumns.map(() => "?").join(", ")})`,
+    invoiceInsertValues,
   );
   recordStatusChange(db, invoiceId, invoice.status || "draft");
 
@@ -595,7 +625,7 @@ export const getInvoices = (): Invoice[] => {
   const results = db.query(`
     SELECT id, invoice_number, customer_id, issue_date, due_date, currency, status,
            subtotal, discount_amount, discount_percentage, tax_rate, tax_amount, total,
-           payment_terms, notes, share_token, created_at, updated_at,
+           payment_terms, notes, created_at, updated_at,
            prices_include_tax, rounding_mode
     FROM invoices
     ORDER BY created_at DESC
@@ -610,7 +640,7 @@ export const getInvoiceById = (id: string): InvoiceWithDetails | null => {
     `
     SELECT id, invoice_number, customer_id, issue_date, due_date, currency, status,
            subtotal, discount_amount, discount_percentage, tax_rate, tax_amount, total,
-           payment_terms, notes, share_token, created_at, updated_at,
+           payment_terms, notes, created_at, updated_at,
            prices_include_tax, rounding_mode
     FROM invoices
     WHERE id = ?
@@ -706,114 +736,6 @@ export const getInvoiceById = (id: string): InvoiceWithDetails | null => {
   const statusHistory = getStatusHistory(id);
   const emailLogs = getEmailLogs(id);
   return { ...invoice, customer, items: itemsWithTaxes, taxes, statusHistory, emailLogs };
-};
-
-export const getInvoiceByShareToken = (
-  shareToken: string,
-): InvoiceWithDetails | null => {
-  const db = getDatabase();
-  const result = db.query(
-    `
-    SELECT id, invoice_number, customer_id, issue_date, due_date, currency, status,
-           subtotal, discount_amount, discount_percentage, tax_rate, tax_amount, total,
-           payment_terms, notes, share_token, created_at, updated_at,
-           prices_include_tax, rounding_mode
-    FROM invoices
-    WHERE share_token = ?
-  `,
-    [shareToken],
-  );
-
-  if (result.length === 0) return null;
-
-  let invoice = mapRowToInvoice(result[0] as unknown[]);
-  invoice = applyDerivedOverdue(invoice);
-
-  // Draft invoices must never be exposed via public share links.
-  if (invoice.status === "draft") return null;
-
-  // Get customer
-  const customer = getCustomerById(invoice.customerId);
-  if (!customer) return null;
-
-  // Get items
-  const itemsResult = db.query(
-    `
-    SELECT id, invoice_id, product_id, description, quantity, unit, unit_price, line_total, notes, sort_order
-    FROM invoice_items
-    WHERE invoice_id = ?
-    ORDER BY sort_order
-  `,
-    [invoice.id],
-  );
-
-  const items = itemsResult.map((row: unknown[]) => ({
-    id: row[0] as string,
-    invoiceId: row[1] as string,
-    productId: row[2] ? String(row[2]) : undefined,
-    description: row[3] as string,
-    quantity: row[4] as number,
-    unit: row[5] ? String(row[5]) : undefined,
-    unitPrice: row[6] as number,
-    lineTotal: row[7] as number,
-    notes: row[8] as string,
-    sortOrder: row[9] as number,
-  }));
-
-  // Attach per-item taxes
-  type ItemTaxRow2 = {
-    taxDefinitionId?: string;
-    percent: number;
-    taxableAmount: number;
-    amount: number;
-    included: boolean;
-    note?: string;
-  };
-  let itemsWithTaxes = items.map((it) => ({ ...it }));
-  if (items.length > 0) {
-    const placeholders = items.map(() => "?").join(",");
-    const taxRows = db.query(
-      `SELECT invoice_item_id, tax_definition_id, percent, taxable_amount, amount, included, note FROM invoice_item_taxes WHERE invoice_item_id IN (${placeholders})`,
-      items.map((it) => it.id),
-    );
-    const taxesByItem = new Map<string, ItemTaxRow2[]>();
-    for (const r of taxRows) {
-      const itemId = String((r as unknown[])[0]);
-      const tax: ItemTaxRow2 = {
-        taxDefinitionId: (r as unknown[])[1]
-          ? String((r as unknown[])[1])
-          : undefined,
-        percent: Number((r as unknown[])[2]),
-        taxableAmount: Number((r as unknown[])[3]),
-        amount: Number((r as unknown[])[4]),
-        included: Boolean((r as unknown[])[5]),
-        note: (r as unknown[])[6] as string | undefined,
-      };
-      if (!taxesByItem.has(itemId)) taxesByItem.set(itemId, []);
-      taxesByItem.get(itemId)!.push(tax);
-    }
-    itemsWithTaxes = items.map((it) => ({
-      ...it,
-      taxes: taxesByItem.get(it.id),
-    }));
-  }
-
-  // Invoice tax summary
-  const invTaxRows = db.query(
-    `SELECT id, invoice_id, tax_definition_id, percent, taxable_amount, tax_amount FROM invoice_taxes WHERE invoice_id = ?`,
-    [invoice.id],
-  );
-  const taxes = invTaxRows.map((r) => ({
-    id: r[0] as string,
-    invoiceId: r[1] as string,
-    taxDefinitionId: r[2] ? String(r[2]) : undefined,
-    percent: Number(r[3] as number),
-    taxableAmount: Number(r[4] as number),
-    taxAmount: Number(r[5] as number),
-  }));
-
-  const statusHistory = getStatusHistory(String(invoice.id));
-  return { ...invoice, customer, items: itemsWithTaxes, taxes, statusHistory };
 };
 
 export const updateInvoice = async (
@@ -1208,7 +1130,6 @@ export const duplicateInvoice = async (
   if (!original) return null;
   const db = getDatabase();
   const newId = generateUUID();
-  const newShare = generateShareToken();
   const now = new Date();
   // Start as draft with a draft invoice number; copy descriptive fields, totals will be recalculated from items
   const items = original.items || [];
@@ -1226,9 +1147,9 @@ export const duplicateInvoice = async (
     INSERT INTO invoices (
       id, invoice_number, customer_id, issue_date, due_date, currency, status,
       subtotal, discount_amount, discount_percentage, tax_rate, tax_amount, total,
-      payment_terms, notes, share_token, created_at, updated_at,
+      payment_terms, notes, created_at, updated_at,
       prices_include_tax, rounding_mode
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
       [
         newId,
@@ -1246,7 +1167,7 @@ export const duplicateInvoice = async (
         totals.total,
         original.paymentTerms || null,
         original.notes || null,
-        newShare,
+        "",
         now,
         now,
         (original as Invoice).pricesIncludeTax ? 1 : 0,
@@ -1289,96 +1210,6 @@ export const duplicateInvoice = async (
   return await getInvoiceById(newId);
 };
 
-export const publishInvoice = async (
-  id: string,
-): Promise<{ shareToken: string; shareUrl: string }> => {
-  const invoice = await getInvoiceById(id);
-  if (!invoice) {
-    throw new Error("Invoice not found");
-  }
-
-  // Validate minimal required fields before issuing
-  const missing: string[] = [];
-  if (!invoice.customer?.name) missing.push("customer.name");
-  if (!invoice.items || invoice.items.length === 0) missing.push("items");
-  if (!invoice.currency) missing.push("currency");
-  if (!invoice.issueDate) missing.push("issueDate");
-  if (missing.length) {
-    throw new Error(
-      `Cannot publish invoice. Missing required fields: ${missing.join(", ")}`,
-    );
-  }
-
-  // Update status to 'sent' if it's currently 'draft'
-  if (invoice.status === "draft") {
-    const db = getDatabase();
-    const now = new Date();
-    let num = invoice.invoiceNumber;
-    if (num.startsWith("DRAFT-")) {
-      num = getNextInvoiceNumber();
-    }
-    db.execute("BEGIN");
-    try {
-      db.query(
-        "UPDATE invoices SET status = 'sent', invoice_number = ?, updated_at = ? WHERE id = ?",
-        [num, now, id],
-      );
-      recordStatusChange(db, id, "sent");
-      db.execute("COMMIT");
-    } catch (e) {
-      try {
-        db.execute("ROLLBACK");
-      } catch {
-        /* ignore */
-      }
-      throw e;
-    }
-  }
-
-  const shareUrl = `${
-    Deno.env.get("BASE_URL") || "http://localhost:3000"
-  }/api/v1/public/invoices/${invoice.shareToken}`;
-
-  return {
-    shareToken: invoice.shareToken,
-    shareUrl,
-  };
-};
-
-export const unpublishInvoice = async (
-  id: string,
-): Promise<{ shareToken: string }> => {
-  const existing = await getInvoiceById(id);
-  if (!existing) throw new Error("Invoice not found");
-
-  // Only sent or overdue invoices can be unpublished
-  if (existing.status !== "sent" && existing.status !== "overdue") {
-    throw new Error("Only sent or overdue invoices can be unpublished.");
-  }
-
-  const db = getDatabase();
-  const newToken = generateShareToken();
-  const now = new Date();
-  // Rotate share token to invalidate old public links and revert invoice to draft
-  db.execute("BEGIN");
-  try {
-    db.query(
-      "UPDATE invoices SET share_token = ?, status = 'draft', updated_at = ? WHERE id = ?",
-      [newToken, now, id],
-    );
-    recordStatusChange(db, id, "draft");
-    db.execute("COMMIT");
-  } catch (e) {
-    try {
-      db.execute("ROLLBACK");
-    } catch {
-      /* ignore */
-    }
-    throw e;
-  }
-
-  return { shareToken: newToken };
-};
 
 export const voidInvoice = async (id: string): Promise<{ success: true }> => {
   const existing = await getInvoiceById(id);
@@ -1446,11 +1277,10 @@ function mapRowToInvoice(row: unknown[]): Invoice {
     total: row[12] as number,
     paymentTerms: row[13] as string,
     notes: row[14] as string,
-    shareToken: row[15] as string,
-    createdAt: new Date(row[16] as string),
-    updatedAt: new Date(row[17] as string),
-    pricesIncludeTax: Boolean(row[18] as number),
-    roundingMode: (row[19] as string) || "line",
+    createdAt: new Date(row[15] as string),
+    updatedAt: new Date(row[16] as string),
+    pricesIncludeTax: Boolean(row[17] as number),
+    roundingMode: (row[18] as string) || "line",
   };
 }
 

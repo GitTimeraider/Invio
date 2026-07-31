@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getContext } from "svelte";
-  import { FileText, Edit, Copy, ExternalLink, Download, ArrowLeft, MoreHorizontal, FileCode2, ShieldOff, Send, Ban, Trash2, CheckCircle, Upload, Check, Pencil, ChevronDown, Mail } from "lucide-svelte";
+  import { FileText, Download, ArrowLeft, MoreHorizontal, FileCode2, Send, Ban, Trash2, CheckCircle, Check, Pencil, ChevronDown, Mail, Copy } from "lucide-svelte";
   import { enhance } from "$app/forms";
   import { page } from "$app/state";
   import type { SubmitFunction } from "@sveltejs/kit";
@@ -13,7 +13,6 @@
   const getLoc = getContext("localization") as () => any;
 
   let invoice = $derived(data.invoice);
-  let showPublishedBanner = $derived(data.showPublishedBanner);
   let user = $derived(data.user);
 
   let isOverdue = $derived.by(() => {
@@ -29,7 +28,6 @@
 
   let canUpdate = $derived(hasPermission(user, "invoices", "update"));
   let canDelete = $derived(hasPermission(user, "invoices", "delete"));
-  let canPublish = $derived(hasPermission(user, "invoices", "publish"));
   let canVoid = $derived(hasPermission(user, "invoices", "void"));
   let allowProtectedInvoiceChanges = $derived(Boolean(data.allowProtectedInvoiceChanges));
   let isRetentionProtectedInvoice = $derived(invoice?.status === "sent" || invoice?.status === "paid" || invoice?.status === "complete" || invoice?.status === "overdue");
@@ -156,11 +154,6 @@
     const h = String(d.getHours()).padStart(2, "0");
     const m = String(d.getMinutes()).padStart(2, "0");
     return `${date} ${h}:${m}`;
-  }
-
-  function copyLink() {
-    navigator.clipboard.writeText(`${page.url.origin}/public/invoices/${invoice.shareToken}`);
-    alert(t("Link copied!"));
   }
 
   function confirmAction(message: string | (() => string)): SubmitFunction {
@@ -342,32 +335,6 @@
     </div>
   {/if}
 
-  {#if showPublishedBanner && invoice?.shareToken}
-    <div class="alert alert-success mb-4 text-sm shadow sm:text-base">
-      <CheckCircle size={20} />
-      <div class="flex-1 overflow-hidden">
-        <div class="font-medium">{t("Invoice published")}</div>
-        <div class="truncate text-sm break-all opacity-80">
-          {t("Public link")}:
-          <a class="link" href="/public/invoices/{invoice.shareToken}" target="_blank">
-            {page.url.origin}/public/invoices/{invoice.shareToken}
-          </a>
-        </div>
-      </div>
-      <div class="flex shrink-0 gap-2">
-        <a class="btn btn-xs sm:btn-sm btn-ghost" target="_blank" href="/public/invoices/{invoice.shareToken}">
-          {t("Open")}
-        </a>
-        <button type="button" class="btn btn-xs sm:btn-sm" onclick={copyLink}>
-          {t("Copy link")}
-        </button>
-        <a class="btn btn-xs sm:btn-sm btn-primary" href="/api/v1/invoices/{invoice.id}/pdf" target="_blank">
-          {t("Download PDF")}
-        </a>
-      </div>
-    </div>
-  {/if}
-
   <div class="border-base-200 flex flex-col justify-between gap-4 border-b pb-4 sm:flex-row sm:items-center">
     <div class="flex items-center gap-3">
       <a href="/invoices" class="btn btn-ghost btn-circle btn-sm">
@@ -406,9 +373,6 @@
     <form id="inv-duplicate" method="post" class="hidden" use:enhance>
       <input type="hidden" name="intent" value="duplicate" />
     </form>
-    <form id="inv-unpublish" method="post" class="hidden" use:enhance>
-      <input type="hidden" name="intent" value="unpublish" />
-    </form>
     <form id="inv-mark-sent" method="post" class="hidden" use:enhance>
       <input type="hidden" name="intent" value="mark-sent" />
     </form>
@@ -438,16 +402,6 @@
             <Pencil size={16} />
             <span class="hidden sm:inline">{t("Edit")}</span>
           </a>
-        {/if}
-
-        {#if invoice.status === "draft" && canPublish}
-          <form method="post" use:enhance>
-            <input type="hidden" name="intent" value="publish" />
-            <button type="submit" class="btn btn-sm btn-success" title={t("Make public and mark as sent")}>
-              <Upload size={16} />
-              <span class="hidden sm:inline">{t("Publish")}</span>
-            </button>
-          </form>
         {/if}
 
         {#if invoice.status === "paid" && canUpdate}
@@ -525,14 +479,6 @@
               </a>
             </li>
             <div class="divider my-0 py-0"></div>
-            {#if (invoice.status === "sent" || invoice.status === "overdue") && canPublish}
-              <li>
-                <button type="submit" form="inv-unpublish" class="flex items-center gap-2 py-2">
-                  <ShieldOff size={16} />
-                  {t("Unpublish")}
-                </button>
-              </li>
-            {/if}
             {#if invoice.status === "paid" && canUpdate}
               <li>
                 <button type="submit" form="inv-mark-complete" class="flex items-center gap-2 py-2">
@@ -634,12 +580,6 @@
           <Download size={16} />
           {t("Download PDF")}
         </a>
-        {#if invoice.status && invoice.status !== "draft" && invoice.shareToken}
-          <a class="btn btn-sm btn-outline" href="/public/invoices/{invoice.shareToken}" target="_blank">
-            <ExternalLink size={16} />
-            {t("View public link")}
-          </a>
-        {/if}
       </div>
     </div>
 

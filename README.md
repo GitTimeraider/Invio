@@ -58,7 +58,7 @@ A modern, self-hosted invoice management platform for freelancers and small to m
 
 ## Features
 
-- **Invoice Management** — Create, edit, and track invoices with draft/sent/paid/overdue/voided statuses and public share links
+- **Invoice Management** — Create, edit, and track invoices with draft/sent/paid/overdue/voided statuses and direct email delivery
 - **Customer Database** — Store contact info, tax IDs, company details, and country codes
 - **Product Catalog** — Define products and services with pricing, units, SKUs, and tax categories
 - **Template Engine** — Multiple built-in templates (Professional Modern, Minimalist Clean, Slate, Nova) with custom upload support
