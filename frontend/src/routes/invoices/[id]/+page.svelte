@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getContext } from "svelte";
-  import { FileText, Download, ArrowLeft, MoreHorizontal, FileCode2, Send, Ban, Trash2, CheckCircle, Check, Pencil, ChevronDown, Mail } from "lucide-svelte";
+  import { FileText, Download, ArrowLeft, MoreHorizontal, FileCode2, Send, Ban, Trash2, CheckCircle, Check, Pencil, ChevronDown, Mail, Copy } from "lucide-svelte";
   import { enhance } from "$app/forms";
   import { page } from "$app/state";
   import type { SubmitFunction } from "@sveltejs/kit";
