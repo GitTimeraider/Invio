@@ -2009,7 +2009,6 @@ adminRoutes.post(
       `Invoice: #${invoiceNumber}`,
       `Issue date: ${issueDate}`,
       dueDate ? `Due date: ${dueDate}` : "",
-      shareLink ? `\nView online: ${shareLink}` : "",
     ].filter((l) => l !== undefined).join("\n").trim();
 
     const emailPayload = {
